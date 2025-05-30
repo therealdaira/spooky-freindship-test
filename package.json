@@ -1,0 +1,477 @@
+// pages/lobby/[gameId].js - CREATE THIS FILE IN FOLDER "lobby"
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/router';
+import Head from 'next/head';
+
+export default function Lobby() {
+  const router = useRouter();
+  const { gameId, name, host } = router.query;
+  const [gameData, setGameData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    if (!gameId || !name) return;
+
+    // Load game data
+    const data = JSON.parse(localStorage.getItem(`game_${gameId}`) || 'null');
+    if (!data) {
+      alert('Game not found!');
+      router.push('/');
+      return;
+    }
+
+    setGameData(data);
+    setLoading(false);
+
+    // Simulate real-time updates
+    const interval = setInterval(() => {
+      const updatedData = JSON.parse(localStorage.getItem(`game_${gameId}`) || 'null');
+      if (updatedData) {
+        setGameData(updatedData);
+      }
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [gameId, name]);
+
+  const toggleReady = () => {
+    if (!gameData) return;
+
+    const updatedPlayers = { ...gameData.players };
+    updatedPlayers[name].ready = !updatedPlayers[name].ready;
+
+    const updatedData = { ...gameData, players: updatedPlayers };
+    localStorage.setItem(`game_${gameId}`, JSON.stringify(updatedData));
+    setGameData(updatedData);
+  };
+
+  const startGame = () => {
+    const players = Object.values(gameData.players);
+    if (players.length < 2) {
+      alert('Need 2 players to start!');
+      return;
+    }
+
+    const allReady = players.every(player => player.ready);
+    if (!allReady) {
+      alert('All players must be ready!');
+      return;
+    }
+
+    const updatedData = { ...gameData, status: 'playing', currentPhase: 'answering' };
+    localStorage.setItem(`game_${gameId}`, JSON.stringify(updatedData));
+    router.push(`/game/${gameId}?name=${encodeURIComponent(name)}`);
+  };
+
+  const copyGameId = async () => {
+    try {
+      await navigator.clipboard.writeText(gameId);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      // Fallback for older browsers
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-red-900 via-black to-red-800 flex items-center justify-center">
+        <div className="text-white text-xl">Loading lobby...</div>
+      </div>
+    );
+  }
+
+  const players = Object.values(gameData?.players || {});
+  const isHost = host === 'true';
+
+  return (
+    <>
+      <Head>
+        <title>Game Lobby - Spooky Friendship Test</title>
+      </Head>
+
+      <div className="min-h-screen bg-gradient-to-br from-red-900 via-black to-red-800 p-4">
+        <div className="max-w-2xl mx-auto pt-8">
+          {/* Header */}
+          <div className="text-center mb-8">
+            <h1 className="text-4xl font-bold text-red-500 mb-4">👻 Game Lobby 👻</h1>
+            
+            {/* Game ID Display */}
+            <div className="bg-black bg-opacity-60 border border-red-600 rounded-lg p-4 mb-4">
+              <p className="text-orange-300 mb-2">Share this Game ID with your friend:</p>
+              <div className="flex items-center justify-center space-x-2">
+                <code className="bg-gray-800 px-4 py-2 rounded text-green-400 text-2xl font-mono">
+                  {gameId}
+                </code>
+                <button
+                  onClick={copyGameId}
+                  className="bg-orange-600 hover:bg-orange-700 text-white px-3 py-2 rounded transition"
+                >
+                  {copied ? '✅' : '📋'}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Players List */}
+          <div className="bg-black bg-opacity-60 border border-red-600 rounded-lg p-6 mb-6">
+            <h2 className="text-xl font-bold text-orange-300 mb-4">
+              Players ({players.length}/2)
+            </h2>
+            
+            <div className="space-y-3">
+              {players.map((player, index) => (
+                <div
+                  key={player.name}
+                  className={`flex items-center justify-between p-4 rounded-lg border ${
+                    player.name === name
+                      ? 'border-green-500 bg-green-900 bg-opacity-30'
+                      : 'border-gray-600 bg-gray-800 bg-opacity-50'
+                  }`}
+                >
+                  <div className="flex items-center space-x-3">
+                    <div className="text-2xl">
+                      {index === 0 ? '👑' : '👤'}
+                    </div>
+                    <div>
+                      <p className="text-white font-medium">
+                        {player.name}
+                        {player.name === name && ' (You)'}
+                        {index === 0 && ' (Host)'}
+                      </p>
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-center space-x-2">
+                    <span className={`px-3 py-1 rounded text-sm font-medium ${
+                      player.ready 
+                        ? 'bg-green-600 text-white' 
+                        : 'bg-gray-600 text-gray-200'
+                    }`}>
+                      {player.ready ? '✅ Ready' : '⏳ Not Ready'}
+                    </span>
+                  </div>
+                </div>
+              ))}
+              
+              {/* Empty slot */}
+              {players.length < 2 && (
+                <div className="flex items-center justify-center p-4 rounded-lg border border-dashed border-gray-600 bg-gray-800 bg-opacity-30">
+                  <div className="text-center text-gray-400">
+                    <div className="text-3xl mb-2">👻</div>
+                    <p>Waiting for another player...</p>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Action Buttons */}
+          <div className="space-y-4">
+            <button
+              onClick={toggleReady}
+              className={`w-full py-3 px-6 rounded-lg font-bold text-lg transition transform hover:scale-105 ${
+                gameData?.players[name]?.ready
+                  ? 'bg-gray-600 hover:bg-gray-700 text-white'
+                  : 'bg-green-600 hover:bg-green-700 text-white'
+              }`}
+            >
+              {gameData?.players[name]?.ready ? '❌ Not Ready' : '✅ I\'m Ready!'}
+            </button>
+
+            {isHost && (
+              <button
+                onClick={startGame}
+                disabled={players.length < 2 || !players.every(p => p.ready)}
+                className="w-full bg-red-600 hover:bg-red-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold py-3 px-6 rounded-lg transition transform hover:scale-105 disabled:transform-none"
+              >
+                {players.length < 2 
+                  ? '⏳ Waiting for Players...' 
+                  : !players.every(p => p.ready)
+                  ? '⏳ Waiting for All Ready...'
+                  : '🚀 START GAME!'
+                }
+              </button>
+            )}
+
+            {!isHost && (
+              <div className="text-center text-orange-300">
+                <p>⏳ Waiting for host to start the game...</p>
+              </div>
+            )}
+          </div>
+
+          {/* Instructions */}
+          <div className="mt-8 bg-orange-900 bg-opacity-30 border border-orange-600 rounded-lg p-4">
+            <h3 className="text-orange-300 font-bold mb-2">🎮 How to Play:</h3>
+            <ol className="text-orange-200 text-sm space-y-1 list-decimal list-inside">
+              <li>Both players answer 5 personal questions about themselves</li>
+              <li>Then you take turns guessing what your friend answered</li>
+              <li>Get points for correct guesses about your friend</li>
+              <li>See how well you really know each other!</li>
+            </ol>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
+
+// pages/game/[gameId].js - CREATE THIS FILE IN FOLDER "game"
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/router';
+import Head from 'next/head';
+
+export default function Game() {
+  const router = useRouter();
+  const { gameId, name } = router.query;
+  const [currentPhase, setCurrentPhase] = useState('answering');
+  const [questionIndex, setQuestionIndex] = useState(0);
+  const [answer, setAnswer] = useState('');
+  const [guess, setGuess] = useState('');
+  const [answers, setAnswers] = useState({});
+  const [scores, setScores] = useState({});
+
+  const questions = [
+    "What is your favorite color?",
+    "What is your biggest fear?", 
+    "What superpower would you want?",
+    "What is your dream vacation destination?",
+    "What is your favorite food?"
+  ];
+
+  useEffect(() => {
+    if (!gameId || !name) return;
+
+    // Load saved answers
+    const savedAnswers = JSON.parse(localStorage.getItem(`answers_${gameId}`) || '{}');
+    setAnswers(savedAnswers);
+  }, [gameId, name]);
+
+  const submitAnswer = () => {
+    if (!answer.trim()) {
+      alert('Please enter an answer!');
+      return;
+    }
+
+    // Save answer
+    const newAnswers = {
+      ...answers,
+      [`${name}_${questionIndex}`]: answer.trim().toLowerCase()
+    };
+    setAnswers(newAnswers);
+    localStorage.setItem(`answers_${gameId}`, JSON.stringify(newAnswers));
+
+    setAnswer('');
+    
+    if (questionIndex < questions.length - 1) {
+      setQuestionIndex(questionIndex + 1);
+    } else {
+      // Move to guessing phase
+      setCurrentPhase('guessing');
+      setQuestionIndex(0);
+    }
+  };
+
+  const submitGuess = () => {
+    if (!guess.trim()) {
+      alert('Please enter your guess!');
+      return;
+    }
+
+    // For demo, we'll just check if we have another player's answers
+    const otherPlayerAnswer = answers[`Player2_${questionIndex}`] || answers[`Player1_${questionIndex}`];
+    const isCorrect = otherPlayerAnswer && guess.trim().toLowerCase() === otherPlayerAnswer;
+
+    // Update scores
+    const newScores = { ...scores };
+    newScores[name] = (newScores[name] || 0) + (isCorrect ? 1 : 0);
+    setScores(newScores);
+
+    // Show result
+    alert(isCorrect 
+      ? `Correct! They answered: "${otherPlayerAnswer}"` 
+      : `Let's see... They answered: "${otherPlayerAnswer || 'something different'}"`
+    );
+
+    setGuess('');
+    
+    if (questionIndex < questions.length - 1) {
+      setQuestionIndex(questionIndex + 1);
+    } else {
+      // Game finished
+      router.push(`/results/${gameId}?name=${encodeURIComponent(name)}&score=${newScores[name] || 0}`);
+    }
+  };
+
+  return (
+    <>
+      <Head>
+        <title>Playing Game - Spooky Friendship Test</title>
+      </Head>
+
+      <div className="min-h-screen bg-gradient-to-br from-red-900 via-black to-red-800 p-4">
+        <div className="max-w-2xl mx-auto pt-8">
+          {/* Header */}
+          <div className="text-center mb-8">
+            <h1 className="text-3xl font-bold text-red-500 mb-2">
+              👻 Friendship Test 👻
+            </h1>
+            <div className="text-orange-300">
+              Phase: {currentPhase === 'answering' ? 'Answering Questions' : 'Guessing Answers'}
+            </div>
+            <div className="text-sm text-gray-300">
+              Question {questionIndex + 1} of {questions.length}
+            </div>
+          </div>
+
+          {/* Question Card */}
+          <div className="bg-black bg-opacity-60 border border-red-600 rounded-lg p-6 mb-6">
+            <div className="text-center mb-6">
+              <div className="text-lg text-orange-300 mb-4">
+                {currentPhase === 'answering' 
+                  ? `${name}, answer this question:` 
+                  : `${name}, guess what your friend answered:`
+                }
+              </div>
+              <div className="text-xl text-white font-medium">
+                {questions[questionIndex]}
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <textarea
+                value={currentPhase === 'answering' ? answer : guess}
+                onChange={(e) => currentPhase === 'answering' 
+                  ? setAnswer(e.target.value) 
+                  : setGuess(e.target.value)
+                }
+                placeholder={currentPhase === 'answering' 
+                  ? "Your answer..." 
+                  : "What do you think they said?"
+                }
+                className="w-full px-4 py-3 bg-gray-900 border border-red-600 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-red-500 resize-none"
+                rows={3}
+                onKeyPress={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    currentPhase === 'answering' ? submitAnswer() : submitGuess();
+                  }
+                }}
+              />
+
+              <button
+                onClick={currentPhase === 'answering' ? submitAnswer : submitGuess}
+                className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-6 rounded-lg transition transform hover:scale-105"
+              >
+                {currentPhase === 'answering' ? '📝 Submit Answer' : '🔮 Submit Guess'}
+              </button>
+            </div>
+          </div>
+
+          {/* Progress */}
+          <div className="bg-gray-800 rounded-full h-2 mb-4">
+            <div 
+              className="bg-red-600 h-2 rounded-full transition-all duration-300"
+              style={{ width: `${((questionIndex + 1) / questions.length) * 100}%` }}
+            ></div>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
+
+// pages/results/[gameId].js - CREATE THIS FILE IN FOLDER "results"
+import { useRouter } from 'next/router';
+import Head from 'next/head';
+import { useState } from 'react';
+
+export default function Results() {
+  const router = useRouter();
+  const { gameId, name, score } = router.query;
+  const [finalScore] = useState(parseInt(score) || 0);
+
+  const getFriendshipLevel = (score) => {
+    if (score >= 5) return { level: "👑 Soul Mates", class: "text-yellow-400", message: "You know each other perfectly!" };
+    if (score >= 4) return { level: "🔥 Best Friends", class: "text-orange-400", message: "Amazing friendship!" };
+    if (score >= 3) return { level: "😊 Good Friends", class: "text-green-400", message: "You know each other well!" };
+    if (score >= 2) return { level: "🤔 Getting There", class: "text-blue-400", message: "Room for improvement!" };
+    return { level: "👻 Strangers", class: "text-red-400", message: "Time to get to know each other better!" };
+  };
+
+  const friendship = getFriendshipLevel(finalScore);
+
+  const playAgain = () => {
+    router.push('/');
+  };
+
+  const shareResults = () => {
+    const shareText = `I just scored ${finalScore}/5 on the Spooky Friendship Test! ${friendship.level} Think you know me better? Play at ${window.location.origin}`;
+    
+    if (navigator.share) {
+      navigator.share({
+        title: 'My Friendship Test Results!',
+        text: shareText
+      });
+    } else {
+      if (navigator.clipboard) {
+        navigator.clipboard.writeText(shareText);
+        alert('Results copied to clipboard!');
+      } else {
+        alert('Share this: ' + shareText);
+      }
+    }
+  };
+
+  return (
+    <>
+      <Head>
+        <title>Results - Spooky Friendship Test</title>
+      </Head>
+
+      <div className="min-h-screen bg-gradient-to-br from-red-900 via-black to-red-800 p-4 flex items-center justify-center">
+        <div className="max-w-md w-full text-center">
+          <div className="bg-black bg-opacity-80 border border-red-600 rounded-lg p-8">
+            <h1 className="text-3xl font-bold text-red-500 mb-6">
+              🎉 Results 🎉
+            </h1>
+
+            <div className="mb-6">
+              <div className="text-6xl mb-4">{finalScore}/5</div>
+              <div className={`text-2xl font-bold mb-2 ${friendship.class}`}>
+                {friendship.level}
+              </div>
+              <div className="text-orange-200">
+                {friendship.message}
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <button
+                onClick={shareResults}
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg transition"
+              >
+                📱 Share Results
+              </button>
+
+              <button
+                onClick={playAgain}
+                className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-6 rounded-lg transition"
+              >
+                🎮 Play Again
+              </button>
+            </div>
+          </div>
+
+          <div className="mt-6 text-center text-orange-300 text-sm">
+            <p>🎃 Thanks for playing the Spooky Friendship Test! 🎃</p>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
